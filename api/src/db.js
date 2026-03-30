@@ -1,28 +1,25 @@
-import pg from 'pg';
+import pkg from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const { Pool } = pg;
+const { Pool } = pkg;  // This line is the fix
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false  // Required for Neon
+    rejectUnauthorized: false
   },
-  max: 10,                     // Maximum 10 connections in the pool
-  idleTimeoutMillis: 30000,    // Close idle connections after 30s
-  connectionTimeoutMillis: 2000 // Fail fast if can't connect in 2s
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000
 });
 
-// Test the connection on startup
-pool.on('connect', () => {
-  console.log('Connected to Neon PostgreSQL');
-});
+pool.on('connect', () => console.log('Connected to Neon PostgreSQL'));
 
 pool.on('error', (err) => {
   console.error('PostgreSQL pool error:', err);
-  process.exit(-1); // Crash the process — don't run without a DB
+  process.exit(-1);
 });
 
 export default pool;
