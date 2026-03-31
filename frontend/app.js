@@ -176,10 +176,16 @@ function showReport(job) {
     `${job.checks_run || 0} checks run`;
 
   // Scores
-  animateScore('overall', job.overall_score);
-  animateScore('performance', job.performance_score);
-  animateScore('accessibility', job.accessibility_score);
-  animateScore('seo', job.seo_score);
+  // Scores — fallback to report scores if top-level scores are null
+  const perfScore = job.performance_score ?? report?.scores?.performance ?? 0;
+  const a11yScore = job.accessibility_score ?? report?.scores?.accessibility ?? 0;
+  const seoScore = job.seo_score ?? report?.scores?.seo ?? 0;
+  const overallScore = job.overall_score ?? report?.scores?.overall ?? 0;
+
+  animateScore('overall', overallScore);
+  animateScore('performance', perfScore);
+  animateScore('accessibility', a11yScore);
+  animateScore('seo', seoScore);
 
   // Performance metrics
   if (report?.performance?.metrics) {
