@@ -19,7 +19,7 @@ export const crawlPage = async (url) => {
 
     const response = await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: 30000
+      timeout: 60000
     });
 
     const statusCode = response.status();
