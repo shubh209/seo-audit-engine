@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SEO Audit Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="noise"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-bracket">[</span>
+      SEO<span class="logo-accent">_</span>AUDIT
+      <span class="logo-bracket">]</span>
+    </div>
+    <div class="header-meta">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="header-status">ready</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Submit View -->
+    <section class="submit-section" id="submit-section">
+      <div class="hero-label">// enter target url</div>
+      <h1 class="hero-title">Audit any website.<br/>Get real scores.</h1>
+      <p class="hero-sub">Performance. Accessibility. SEO. All in one distributed scan.</p>
+
+      <div class="input-group">
+        <span class="input-prefix">https://</span>
+        <input
+          type="text"
+          id="url-input"
+          placeholder="example.com"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="submit-btn">
+          <span id="btn-text">RUN AUDIT</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </div>
+      <div class="input-error" id="input-error"></div>
+
+      <div class="recent-section" id="recent-section">
+        <div class="recent-label">// recent audits</div>
+        <div class="recent-list" id="recent-list"></div>
+      </div>
+    </section>
+
+    <!-- Progress View -->
+    <section class="progress-section hidden" id="progress-section">
+      <div class="progress-url" id="progress-url"></div>
+      <div class="progress-label">// processing audit pipeline</div>
+
+      <div class="stepper" id="stepper">
+        <div class="step" data-step="crawling">
+          <div class="step-indicator">
+            <span class="step-icon">01</span>
+          </div>
+          <div class="step-content">
+            <div class="step-name">Crawling Page</div>
+            <div class="step-desc">Loading page via headless browser, extracting DOM</div>
+          </div>
+          <div class="step-status">waiting</div>
+        </div>
+
+        <div class="step" data-step="scoring_performance">
+          <div class="step-indicator">
+            <span class="step-icon">02</span>
+          </div>
+          <div class="step-content">
+            <div class="step-name">Performance Score</div>
+            <div class="step-desc">Running Lighthouse engine, measuring Core Web Vitals</div>
+          </div>
+          <div class="step-status">waiting</div>
+        </div>
+
+        <div class="step" data-step="checking_accessibility">
+          <div class="step-indicator">
+            <span class="step-icon">03</span>
+          </div>
+          <div class="step-content">
+            <div class="step-name">Accessibility Audit</div>
+            <div class="step-desc">Running axe-core, checking WCAG compliance</div>
+          </div>
+          <div class="step-status">waiting</div>
+        </div>
+
+        <div class="step" data-step="checking_seo">
+          <div class="step-indicator">
+            <span class="step-icon">04</span>
+          </div>
+          <div class="step-content">
+            <div class="step-name">SEO Analysis</div>
+            <div class="step-desc">Running 7+ custom checks against SEO best practices</div>
+          </div>
+          <div class="step-status">waiting</div>
+        </div>
+
+        <div class="step" data-step="building_report">
+          <div class="step-indicator">
+            <span class="step-icon">05</span>
+          </div>
+          <div class="step-content">
+            <div class="step-name">Building Report</div>
+            <div class="step-desc">Compiling results, calculating scores</div>
+          </div>
+          <div class="step-status">waiting</div>
+        </div>
+      </div>
+
+      <div class="progress-elapsed">
+        elapsed: <span id="elapsed-time">0.0s</span>
+      </div>
+    </section>
+
+    <!-- Report View -->
+    <section class="report-section hidden" id="report-section">
+
+      <div class="report-header">
+        <div class="report-url-label">// audit complete</div>
+        <div class="report-url-display" id="report-url-display"></div>
+        <div class="report-meta">
+          <span id="report-time"></span>
+          <span class="report-meta-sep">·</span>
+          <span id="report-checks"></span>
+          <span class="report-meta-sep">·</span>
+          <button class="new-audit-btn" id="new-audit-btn">+ new audit</button>
+        </div>
+      </div>
+
+      <!-- Score Cards -->
+      <div class="scores-grid">
+        <div class="score-card score-overall">
+          <div class="score-label">overall</div>
+          <div class="score-number" id="score-overall">--</div>
+          <div class="score-bar"><div class="score-fill" id="bar-overall"></div></div>
+        </div>
+        <div class="score-card">
+          <div class="score-label">performance</div>
+          <div class="score-number" id="score-performance">--</div>
+          <div class="score-bar"><div class="score-fill" id="bar-performance"></div></div>
+        </div>
+        <div class="score-card">
+          <div class="score-label">accessibility</div>
+          <div class="score-number" id="score-accessibility">--</div>
+          <div class="score-bar"><div class="score-fill" id="bar-accessibility"></div></div>
+        </div>
+        <div class="score-card">
+          <div class="score-label">seo</div>
+          <div class="score-number" id="score-seo">--</div>
+          <div class="score-bar"><div class="score-fill" id="bar-seo"></div></div>
+        </div>
+      </div>
+
+      <!-- Report Panels -->
+      <div class="panels-grid">
+
+        <!-- Performance Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-label">// performance metrics</span>
+            <span class="panel-score" id="panel-perf-score"></span>
+          </div>
+          <div class="metrics-list" id="metrics-list"></div>
+        </div>
+
+        <!-- SEO Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-label">// seo checks</span>
+            <span class="panel-score" id="panel-seo-score"></span>
+          </div>
+          <div class="checks-list" id="seo-checks-list"></div>
+        </div>
+
+        <!-- Accessibility Panel -->
+        <div class="panel panel-full">
+          <div class="panel-header">
+            <span class="panel-label">// accessibility violations</span>
+            <span class="panel-score" id="panel-a11y-score"></span>
+          </div>
+          <div class="violations-list" id="violations-list"></div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>Built with Node.js · BullMQ · PostgreSQL · Redis · Playwright · Lighthouse</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
