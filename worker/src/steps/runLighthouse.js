@@ -18,8 +18,12 @@ export const runLighthouse = async (url) => {
       port: chrome.port,
       output: 'json',
       onlyCategories: ['performance'],
-      logLevel: 'error'
-    });
+      logLevel: 'error',
+      settings: {
+        maxWaitForLoad: 30000,    // 30 second max wait
+        timeout: 60000            // 60 second total timeout
+      }
+  });
 
     const { categories, audits } = result.lhr;
 
