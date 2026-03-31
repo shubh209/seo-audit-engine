@@ -339,6 +339,248 @@ function setHeaderStatus(text, active) {
   statusDot.className = `status-dot${active ? ' active' : ''}`;
 }
 
+
+// ============================================
+// PDF DOWNLOAD
+// ============================================
+document.getElementById('download-pdf-btn').addEventListener('click', () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const pageWidth = 210;
+  const margin = 16;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 20;
+
+  const colors = {
+    green: [0, 200, 100],
+    dark: [20, 20, 20],
+    dim: [100, 100, 100],
+    dimmer: [180, 180, 180],
+    red: [220, 60, 60],
+    yellow: [200, 160, 0],
+    bg: [245, 245, 245]
+  };
+
+  const scoreColor = (score) =>
+    score >= 80 ? colors.green : score >= 50 ? colors.yellow : colors.red;
+
+  // Header
+  doc.setFillColor(...[20, 20, 20]);
+  doc.rect(0, 0, pageWidth, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(14);
+  doc.text('[ SEO_AUDIT ]', margin, 13);
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.dimmer);
+  doc.text('seo-audit-engine.pages.dev', margin, 21);
+  doc.setTextColor(0, 255, 136);
+  doc.text('// audit complete', pageWidth - margin - 28, 13);
+
+  y = 38;
+
+  // URL
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...colors.dark);
+  const urlText = document.getElementById('report-url-display').textContent;
+  doc.text(urlText, margin, y);
+  y += 7;
+
+  // Meta
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.dim);
+  const metaTime = document.getElementById('report-time').textContent;
+  const metaChecks = document.getElementById('report-checks').textContent;
+  doc.text(`${metaTime} · ${metaChecks} · ${new Date().toLocaleDateString()}`, margin, y);
+  y += 10;
+
+  // Divider
+  doc.setDrawColor(...colors.dimmer);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  // Score Cards
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...colors.dim);
+  doc.text('// scores', margin, y);
+  y += 5;
+
+  const scoreCards = [
+    { label: 'OVERALL', id: 'score-overall' },
+    { label: 'PERFORMANCE', id: 'score-performance' },
+    { label: 'ACCESSIBILITY', id: 'score-accessibility' },
+    { label: 'SEO', id: 'score-seo' }
+  ];
+
+  const cardWidth = contentWidth / 4;
+  scoreCards.forEach((card, i) => {
+    const x = margin + i * cardWidth;
+    const score = parseInt(document.getElementById(card.id).textContent) || 0;
+
+    doc.setFillColor(...colors.bg);
+    doc.rect(x, y, cardWidth - 2, 22, 'F');
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...colors.dim);
+    doc.text(card.label, x + 3, y + 6);
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(...scoreColor(score));
+    doc.text(String(score), x + 3, y + 18);
+  });
+
+  y += 30;
+
+  // Performance Metrics
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...colors.dim);
+  doc.text('// performance metrics', margin, y);
+  y += 5;
+
+  const metricRows = document.querySelectorAll('.metric-row');
+  metricRows.forEach(row => {
+    const key = row.querySelector('.metric-key')?.textContent;
+    const val = row.querySelector('.metric-value')?.textContent;
+    if (!key || !val) return;
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...colors.dim);
+    doc.text(key, margin, y);
+    doc.setTextColor(...colors.dark);
+    doc.text(val, pageWidth - margin, y, { align: 'right' });
+
+    doc.setDrawColor(...colors.dimmer);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y + 2, pageWidth - margin, y + 2);
+    y += 7;
+  });
+
+  y += 5;
+
+  // SEO Checks
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...colors.dim);
+  doc.text('// seo checks', margin, y);
+  y += 5;
+
+  const checkRows = document.querySelectorAll('.check-row');
+  checkRows.forEach(row => {
+    if (y > 260) { doc.addPage(); y = 20; }
+
+    const icon = row.querySelector('.check-icon');
+    const msg = row.querySelector('.check-message')?.textContent;
+    const impact = row.querySelector('.check-impact')?.textContent;
+    if (!msg) return;
+
+    const isPass = icon?.classList.contains('pass');
+    const isWarn = icon?.classList.contains('warn');
+    const isFail = icon?.classList.contains('fail');
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(isPass ? 0 : 0, isPass ? 180 : (isWarn ? 160 : 200),
+      isPass ? 100 : (isWarn ? 0 : 60));
+    doc.text(isPass ? '✓' : (isWarn ? '⚠' : '✕'), margin, y);
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...colors.dark);
+    const msgLines = doc.splitTextToSize(msg, contentWidth - 8);
+    doc.text(msgLines, margin + 6, y);
+    y += msgLines.length * 4.5;
+
+    if (impact) {
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...colors.dim);
+      doc.text(impact, margin + 6, y);
+      y += 5;
+    }
+
+    doc.setDrawColor(...colors.dimmer);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 4;
+  });
+
+  y += 5;
+  if (y > 240) { doc.addPage(); y = 20; }
+
+  // Accessibility Violations
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...colors.dim);
+  doc.text('// accessibility violations', margin, y);
+  y += 5;
+
+  const violations = document.querySelectorAll('.violation-row');
+  if (violations.length === 0) {
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...colors.green);
+    doc.text('✓ No accessibility violations found', margin, y);
+    y += 8;
+  } else {
+    violations.forEach(row => {
+      if (y > 260) { doc.addPage(); y = 20; }
+
+      const id = row.querySelector('.violation-id')?.textContent;
+      const severity = row.querySelector('.violation-badge')?.textContent;
+      const desc = row.querySelector('.violation-desc')?.textContent;
+      if (!id) return;
+
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...colors.dark);
+      doc.text(id, margin, y);
+
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...colors.red);
+      doc.text(severity || '', margin + 40, y);
+      y += 5;
+
+      if (desc) {
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(...colors.dim);
+        const descLines = doc.splitTextToSize(desc, contentWidth);
+        doc.text(descLines, margin, y);
+        y += descLines.length * 4 + 3;
+      }
+    });
+  }
+
+  // Footer
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(...[20, 20, 20]);
+    doc.rect(0, 285, pageWidth, 12, 'F');
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(6);
+    doc.setTextColor(...colors.dimmer);
+    doc.text('Built with Node.js · BullMQ · PostgreSQL · Redis · Playwright', margin, 292);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, 292, { align: 'right' });
+  }
+
+  // Save
+  const filename = `seo-audit-${urlText.replace(/https?:\/\//, '').replace(/\//g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
+});
+
+
 // ============================================
 // INIT
 // ============================================
