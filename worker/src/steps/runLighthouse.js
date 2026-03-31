@@ -4,7 +4,14 @@ import lighthouse from 'lighthouse';
 export const runLighthouse = async (url) => {
   console.log(`  Running Lighthouse on: ${url}`);
 
-  const chrome = await launch({ chromeFlags: ['--headless', '--no-sandbox'] });
+  // Find the Chromium that Playwright downloaded
+  const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH ||
+    '/opt/render/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell';
+
+  const chrome = await launch({
+    chromePath: chromiumPath,
+    chromeFlags: ['--headless', '--no-sandbox', '--disable-dev-shm-usage']
+  });
 
   try {
     const result = await lighthouse(url, {
