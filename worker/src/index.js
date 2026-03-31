@@ -30,4 +30,15 @@ worker.on('error', (err) => {
   console.error('Worker error:', err);
 });
 
+import http from 'http';
+
+// Minimal HTTP server to satisfy Render's port requirement
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Worker is running');
+});
+server.listen(3001, '0.0.0.0', () => {
+  console.log('Worker health server on port 3001');
+});
+
 console.log('Worker is running and waiting for jobs...');
