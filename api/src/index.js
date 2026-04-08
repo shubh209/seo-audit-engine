@@ -40,3 +40,15 @@ process.on('uncaughtException', (err) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`API server running on port ${PORT}`);
 });
+
+// Keep-alive ping to prevent Render free tier spin-down
+if (process.env.NODE_ENV === 'production') {
+  setInterval(async () => {
+    try {
+      await fetch('https://seo-audit-engine-1.onrender.com');
+      console.log('Keep-alive ping sent to worker');
+    } catch (err) {
+      console.error('Keep-alive ping failed:', err.message);
+    }
+  }, 14 * 60 * 1000); // ping every 14 minutes
+}
