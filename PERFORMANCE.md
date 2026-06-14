@@ -20,7 +20,7 @@
 | **Free tier spin-down** | Service sleeps after ~15 min idle; first request wakes it (often 30–90s) |
 | **Cold start** | Measured: warm health check ~0.3s; cold can exceed 30s |
 
-**Mitigations:** Render Starter ($7/mo) disables spin-down, or external uptime ping (UptimeRobot every 5 min).
+**Mitigations:** Render Starter ($7/mo) disables spin-down, external uptime ping, or **GitHub Actions cron** (free — see `.github/workflows/keep-alive.yml`).
 
 ---
 
@@ -30,7 +30,9 @@
 
 | Issue | Impact | Status |
 |-------|--------|--------|
-| **Two Chromium launches per audit** | crawl + a11y each launched full browser (~5–10s each on 512MB RAM) | **Fixed** — shared browser singleton |
+| **Two Chromium launches per audit** | crawl + a11y each launched full browser (~5–10s each on 512MB RAM) | **Fixed** — shared browser + axe on live crawl DOM |
+| **Second page for axe (setContent)** | Re-parsed HTML on new page after crawl | **Fixed** — axe runs before crawl page closes |
+| **axe runs all rules** | Full rule set slower than needed | **Fixed** — WCAG 2.1 A/AA tags only, no iframes |
 | **Duplicate HTTP fetch** | Crawl navigates to URL, then perf step fetched same URL again | **Fixed** — perf scored from crawl timing |
 | **Sequential 5-step pipeline** | Cannot overlap crawl/perf/a11y | By design (acceptable) |
 | **60s crawl timeout** | Slow sites wait up to 45s now (reduced) | **Reduced** to 45s |
@@ -41,9 +43,9 @@
 
 Rough estimate for typical marketing site on Render free tier:
 
-| Before | After (estimated) |
-|--------|-------------------|
-| 20–55s | **12–35s** |
+| Before | After (measured warm) |
+|--------|----------------------|
+| 20–55s | **~4–5s** processing, **~5.5s** total wait |
 
 Run new audits, then: `cd api && node ../scripts/measure-metrics.js`
 

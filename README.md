@@ -10,17 +10,18 @@ Distributed website audit platform: submit a URL, get a unified performance, acc
 1. User submits a URL on the frontend
 2. Express API validates the URL, deduplicates recent audits (24h), and enqueues a BullMQ job
 3. Worker runs a 5-stage pipeline: Playwright crawl → response-time performance check → axe-core accessibility → 7 custom SEO rules → report build
-4. Results stored in Neon PostgreSQL; terminal jobs cached in Upstash Redis
-5. Frontend streams progress via SSE (falls back to polling) and renders a scored report with PDF export
+4. Results stored in Neon PostgreSQL; terminal jobs cached in Upstash Redis (`job:v2:*`)
+5. Frontend streams progress via SSE (falls back to polling), shows step timings, and renders a scored report with PDF export
 
 ## Architecture
 
 ```
 frontend/          Vanilla JS on Cloudflare Pages
 api/               Express REST API on Render
-worker/            BullMQ consumer on Render (concurrency: 3)
+worker/            BullMQ consumer on Render (concurrency: 1 on free tier)
 infra/             PostgreSQL schema + migrations
-scripts/           measure-metrics.js — pull [MEASURED] stats from Neon
+scripts/           measure-metrics.js, e2e-smoke-test.js, weakness-test.js
+.github/workflows/ ci.yml + keep-alive.yml (14-min cron, free)
 ```
 
 ## Tech stack
@@ -92,6 +93,8 @@ node scripts/measure-metrics.js
 ## CI/CD
 
 GitHub Actions runs API and worker test suites on every push/PR to `main`.
+
+**Keep-alive (free):** `.github/workflows/keep-alive.yml` pings API `/health` and the worker every 14 minutes to reduce Render free-tier spin-down. Also trigger manually via **Actions → Keep Alive → Run workflow**.
 
 ## Project docs (repo root)
 

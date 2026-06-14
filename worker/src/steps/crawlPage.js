@@ -1,8 +1,9 @@
 import { getBrowser } from '../browser.js';
+import { runAxeOnPage } from './runAccessibility.js';
 
 export const crawlPage = async (url) => {
   console.log(`  Crawling: ${url}`);
-  const start = Date.now();
+  const crawlStart = Date.now();
   const browser = await getBrowser();
   const page = await browser.newPage();
 
@@ -21,7 +22,7 @@ export const crawlPage = async (url) => {
       timeout: 45000
     });
 
-    const loadTimeMs = Date.now() - start;
+    const loadTimeMs = Date.now() - crawlStart;
     const statusCode = response.status();
     const html = await page.content();
 
@@ -51,7 +52,21 @@ export const crawlPage = async (url) => {
       };
     });
 
-    return { ...pageData, html, statusCode, url, loadTimeMs };
+    // Run axe on the live DOM before closing — avoids a second page + setContent
+    const a11yStart = Date.now();
+    const accessibilityData = await runAxeOnPage(page);
+    const a11yMs = Date.now() - a11yStart;
+
+    return {
+      ...pageData,
+      html,
+      statusCode,
+      url,
+      loadTimeMs,
+      crawlMs: loadTimeMs,
+      a11yMs,
+      accessibilityData
+    };
 
   } finally {
     await page.close();

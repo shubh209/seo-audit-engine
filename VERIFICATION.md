@@ -6,7 +6,9 @@ Run these after changes to confirm the project is healthy.
 
 ```bash
 cd api && npm test      # expect 18 passed
-cd ../worker && npm test # expect 31 passed
+cd ../worker && npm test # expect 34 passed
+node ../scripts/weakness-test.js   # live edge-case battery
+node ../scripts/benchmark-audit.js # fresh-URL latency check
 ```
 
 ## 2. Production metrics (Neon)
@@ -36,6 +38,8 @@ Compare output to `seo-audit-engine-metrics-backlog.md` **Actual** column.
 | Check | Date | Result |
 |-------|------|--------|
 | API tests (18) | 2026-06-05 | PASS |
-| Worker tests (31) | 2026-06-05 | PASS |
-| measure-metrics.js | 2026-06-05 | 7 complete, 2 failed, median 20323ms, p95 55087ms |
+| Worker tests (34) | 2026-06-05 | PASS |
+| weakness-test.js (10/10) | 2026-06-05 | PASS |
+| Warm audit benchmark | 2026-06-05 | ~4.2s processing, ~5.5s total wait |
+| measure-metrics.js | 2026-06-05 | 11 complete, 3 failed, median 20323ms (includes pre-opt jobs) |
 | Migration 002 | 2026-06-05 | Applied to Neon |

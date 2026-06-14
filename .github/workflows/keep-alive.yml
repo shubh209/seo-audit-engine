@@ -1,0 +1,26 @@
+name: Keep Alive
+
+# Prevent Render free-tier spin-down (API + worker idle after ~15 min).
+# Runs on GitHub Actions free tier — no cost.
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping API health
+        run: |
+          curl -sf --max-time 45 \
+            https://seo-audit-engine.onrender.com/health \
+            | node -pe "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); if(j.status!=='ok') process.exit(1); console.log('API ok', j.timestamp)"
+
+      - name: Ping worker
+        run: |
+          curl -sf --max-time 120 \
+            https://seo-audit-engine-1.onrender.com/ \
+            | grep -q "Worker is running"

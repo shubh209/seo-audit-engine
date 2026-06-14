@@ -1,7 +1,7 @@
 import pool from './db.js';
 import { crawlPage } from './steps/crawlPage.js';
 import { runPerformanceCheck } from './steps/runPerformanceCheck.js';
-import { runAccessibility } from './steps/runAccessibility.js';
+import { runAccessibility } from './steps/runAccessibility.js'; // fallback if crawl omits a11y
 import { runSEOChecks } from './steps/runSEOChecks.js';
 import { buildReport } from './steps/buildReport.js';
 
@@ -28,8 +28,9 @@ export const processJob = async (jobId, url) => {
     await updateStatus(jobId, 'crawling');
     currentStep = 'crawling';
     const crawl = await timeStep(() => crawlPage(url));
-    stepTimings.crawl_ms = crawl.ms;
     const pageData = crawl.result;
+    stepTimings.crawl_ms = pageData.crawlMs ?? crawl.ms;
+    stepTimings.a11y_ms = pageData.a11yMs ?? 0;
 
     await updateStatus(jobId, 'scoring_performance');
     currentStep = 'scoring_performance';
@@ -39,9 +40,12 @@ export const processJob = async (jobId, url) => {
 
     await updateStatus(jobId, 'checking_accessibility');
     currentStep = 'checking_accessibility';
-    const a11y = await timeStep(() => runAccessibility(pageData.html, url));
-    stepTimings.a11y_ms = a11y.ms;
-    const accessibilityData = a11y.result;
+    let accessibilityData = pageData.accessibilityData;
+    if (!accessibilityData) {
+      const a11y = await timeStep(() => runAccessibility(pageData.html, url));
+      stepTimings.a11y_ms = a11y.ms;
+      accessibilityData = a11y.result;
+    }
 
     await updateStatus(jobId, 'checking_seo');
     currentStep = 'checking_seo';
