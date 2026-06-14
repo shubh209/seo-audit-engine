@@ -70,7 +70,7 @@ router.get('/:id', async (req, res) => {
 
   try {
     // Check Redis cache first
-    const cached = await redis.get(`job:${id}`);
+    const cached = await redis.get(`job:v2:${id}`);
     if (cached) {
       return res.json({ ...JSON.parse(cached), fromCache: true });
     }
@@ -93,7 +93,7 @@ router.get('/:id', async (req, res) => {
 
     // Only cache completed or failed jobs — in-progress jobs change constantly
     if (job.status === 'complete' || job.status === 'failed') {
-      await redis.setex(`job:${id}`, 86400, JSON.stringify(job)); // 24hr TTL
+      await redis.setex(`job:v2:${id}`, 86400, JSON.stringify(job)); // 24hr TTL
     }
 
     res.json(job);

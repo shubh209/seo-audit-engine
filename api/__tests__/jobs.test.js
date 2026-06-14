@@ -141,7 +141,7 @@ describe('GET /api/jobs/:id', () => {
     await request(app).get('/api/jobs/test-id');
 
     expect(redis.setex).toHaveBeenCalledWith(
-      'job:test-id',
+      'job:v2:test-id',
       86400,
       expect.any(String)
     );

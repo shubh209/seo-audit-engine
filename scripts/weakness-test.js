@@ -66,7 +66,8 @@ sseType.includes('text/event-stream') ? pass('SSE content-type') : fail('SSE con
 
 // 6. Fresh audit on lightweight site (performance baseline)
 try {
-  const { job, waitMs } = await auditUntilDone('https://info.cern.ch');
+  const uniqueUrl = `https://info.cern.ch/?t=${Date.now()}`;
+  const { job, waitMs } = await auditUntilDone(uniqueUrl);
   if (job.processing_time_ms < 15000) pass(`fast site audit ${job.processing_time_ms}ms (wait ${waitMs}ms)`);
   else fail('fast site audit', `slow: ${job.processing_time_ms}ms`);
   if (job.crawl_ms != null) pass(`step timings exposed crawl=${job.crawl_ms}ms`);
