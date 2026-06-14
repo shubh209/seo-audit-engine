@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   failed_step TEXT,
   processing_time_ms INT,
   checks_run INT,
+  crawl_ms INT,
+  perf_ms INT,
+  a11y_ms INT,
+  seo_ms INT,
+  report_ms INT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

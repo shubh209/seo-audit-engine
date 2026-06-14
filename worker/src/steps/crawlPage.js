@@ -1,16 +1,15 @@
-import { chromium } from 'playwright';
+import { getBrowser } from '../browser.js';
 
 export const crawlPage = async (url) => {
   console.log(`  Crawling: ${url}`);
-  const browser = await chromium.launch({ headless: true });
+  const start = Date.now();
+  const browser = await getBrowser();
+  const page = await browser.newPage();
 
   try {
-    const page = await browser.newPage();
-
-    // Block images, fonts, and media to speed up the crawl
     await page.route('**/*', (route) => {
       const resourceType = route.request().resourceType();
-      if (['image', 'font', 'media'].includes(resourceType)) {
+      if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
         route.abort();
       } else {
         route.continue();
@@ -19,13 +18,13 @@ export const crawlPage = async (url) => {
 
     const response = await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: 60000
+      timeout: 45000
     });
 
+    const loadTimeMs = Date.now() - start;
     const statusCode = response.status();
     const html = await page.content();
 
-    // Extract key page data
     const pageData = await page.evaluate(() => {
       const getMeta = (name) => {
         const el = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`);
@@ -52,9 +51,9 @@ export const crawlPage = async (url) => {
       };
     });
 
-    return { ...pageData, html, statusCode, url };
+    return { ...pageData, html, statusCode, url, loadTimeMs };
 
   } finally {
-    await browser.close(); // Always close the browser even if an error occurs
+    await page.close();
   }
 };

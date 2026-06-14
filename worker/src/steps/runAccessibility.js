@@ -1,17 +1,16 @@
-import { chromium } from 'playwright';
 import { createRequire } from 'module';
+import { getBrowser } from '../browser.js';
 
 const require = createRequire(import.meta.url);
 
 export const runAccessibility = async (html, url) => {
   console.log(`  Running accessibility checks on: ${url}`);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await getBrowser();
+  const page = await browser.newPage();
 
   try {
-    const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'domcontentloaded' });
 
-    // Inject axe-core into the page and run it
     await page.addScriptTag({
       path: require.resolve('axe-core/axe.min.js')
     });
@@ -33,6 +32,6 @@ export const runAccessibility = async (html, url) => {
     };
 
   } finally {
-    await browser.close();
+    await page.close();
   }
 };

@@ -102,32 +102,78 @@ function showProgress(url, jobId) {
     document.getElementById('elapsed-time').textContent = `${secs}s`;
   }, 100);
 
-  // Poll job status every 2 seconds
-  const pollInterval = setInterval(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/jobs/${jobId}`);
-      const job = await res.json();
-      updateStepper(job.status);
+  // Stream progress via SSE; fall back to polling if the connection fails
+  trackJobProgress(jobId);
+}
 
-      if (job.status === 'complete') {
-        clearInterval(pollInterval);
-        clearInterval(elapsedInterval);
-        setTimeout(() => showReport(job), 800);
-      }
+function trackJobProgress(jobId) {
+  let pollInterval = null;
+  let eventSource = null;
 
-      if (job.status === 'failed') {
-        clearInterval(pollInterval);
-        clearInterval(elapsedInterval);
-        setHeaderStatus('audit failed', false);
-        statusDot.className = 'status-dot error';
-        showError(`Audit failed: ${job.error || 'unknown error'}`);
-        submitBtn.disabled = false;
-      }
+  const cleanup = () => {
+    if (pollInterval) clearInterval(pollInterval);
+    clearInterval(elapsedInterval);
+    if (eventSource) eventSource.close();
+  };
 
-    } catch (err) {
-      console.error('Polling error:', err);
+  const handleJobUpdate = async (job) => {
+    if (job.error === 'Job not found') {
+      showError('Job not found');
+      cleanup();
+      submitBtn.disabled = false;
+      return;
     }
-  }, 2000);
+
+    updateStepper(job.status);
+
+    if (job.status === 'complete') {
+      cleanup();
+      const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+      const fullJob = await res.json();
+      setTimeout(() => showReport(fullJob), 800);
+    }
+
+    if (job.status === 'failed') {
+      cleanup();
+      setHeaderStatus('audit failed', false);
+      statusDot.className = 'status-dot error';
+      showError(`Audit failed: ${job.error || 'unknown error'}`);
+      submitBtn.disabled = false;
+    }
+  };
+
+  const startPollingFallback = () => {
+    if (pollInterval) return;
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+        const job = await res.json();
+        await handleJobUpdate(job);
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 2000);
+  };
+
+  try {
+    eventSource = new EventSource(`${API_BASE}/stream/${jobId}`);
+    eventSource.onmessage = (e) => {
+      try {
+        const job = JSON.parse(e.data);
+        handleJobUpdate(job);
+      } catch (err) {
+        console.error('SSE parse error:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
+      eventSource = null;
+      startPollingFallback();
+    };
+  } catch (err) {
+    console.error('SSE unavailable, using polling:', err);
+    startPollingFallback();
+  }
 }
 
 function updateStepper(currentStatus) {

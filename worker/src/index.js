@@ -15,7 +15,7 @@ const worker = new Worker('seo-audits', async (job) => {
   await processJob(job.data.jobId, job.data.url);
 }, {
   connection,
-  concurrency: 3 // Process up to 3 jobs at the same time
+  concurrency: Number(process.env.WORKER_CONCURRENCY) || 1
 });
 
 worker.on('completed', (job) => {
