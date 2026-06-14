@@ -31,7 +31,9 @@ router.get('/:id', async (req, res) => {
     try {
       const { rows } = await pool.query(
         `SELECT id, status, performance_score, accessibility_score,
-                seo_score, overall_score, error, failed_step, updated_at
+                seo_score, overall_score, error, failed_step,
+                processing_time_ms, crawl_ms, perf_ms, a11y_ms, seo_ms, report_ms,
+                updated_at
          FROM jobs WHERE id = $1`,
         [id]
       );
