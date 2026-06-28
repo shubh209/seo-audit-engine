@@ -58,6 +58,13 @@
             spellcheck="false"
           />
           <button id="submit-btn" type="button">
+            <span
+              class="api-health-dot"
+              id="api-health-dot"
+              role="img"
+              aria-label="API status: checking"
+              title="Checking API…"
+            ></span>
             <span id="btn-text">Run audit</span>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -234,7 +241,7 @@
   </main>
 
   <footer class="site-footer">
-    Node.js · BullMQ · PostgreSQL · Redis · Playwright · axe-core
+    Node.js · pg-boss · PostgreSQL · Playwright · axe-core
   </footer>
 
   <script src="app.js"></script>

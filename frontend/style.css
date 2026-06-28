@@ -273,6 +273,32 @@ body {
 #submit-btn:hover { filter: brightness(1.05); }
 #submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* ── API health indicator dot inside the submit button ─────────────────── */
+.api-health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(4, 18, 13, 0.35);   /* dim/neutral on load */
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.api-health-dot.up {
+  background: #04120d;
+  box-shadow: 0 0 0 2.5px rgba(4, 18, 13, 0.15), 0 0 8px rgba(4, 18, 13, 0.5);
+  animation: health-pulse 2.5s ease-in-out infinite;
+}
+
+.api-health-dot.down {
+  background: #7f1d1d;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+@keyframes health-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
 .input-error {
   min-height: 1.25rem;
   margin-top: 0.65rem;

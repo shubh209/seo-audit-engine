@@ -1,18 +1,19 @@
 const API_BASE = 'https://seo-audit-engine.onrender.com/api';
 
-const submitSection = document.getElementById('submit-section');
+const submitSection   = document.getElementById('submit-section');
 const progressSection = document.getElementById('progress-section');
-const reportSection = document.getElementById('report-section');
-const urlInput = document.getElementById('url-input');
-const submitBtn = document.getElementById('submit-btn');
-const inputError = document.getElementById('input-error');
-const headerStatus = document.getElementById('header-status');
-const statusDot = document.getElementById('status-dot');
-const progressFill = document.getElementById('progress-fill');
+const reportSection   = document.getElementById('report-section');
+const urlInput        = document.getElementById('url-input');
+const submitBtn       = document.getElementById('submit-btn');
+const inputError      = document.getElementById('input-error');
+const headerStatus    = document.getElementById('header-status');
+const statusDot       = document.getElementById('status-dot');
+const progressFill    = document.getElementById('progress-fill');
+const apiHealthDot    = document.getElementById('api-health-dot');
 
-let elapsedInterval = null;
-let elapsedStart = null;
-let lastJobSnapshot = null;
+let elapsedInterval  = null;
+let elapsedStart     = null;
+let lastJobSnapshot  = null;
 
 const STEP_ORDER = [
   'crawling',
@@ -23,12 +24,39 @@ const STEP_ORDER = [
 ];
 
 const TIMING_KEYS = {
-  crawl: 'crawl_ms',
-  perf: 'perf_ms',
-  a11y: 'a11y_ms',
-  seo: 'seo_ms',
+  crawl:  'crawl_ms',
+  perf:   'perf_ms',
+  a11y:   'a11y_ms',
+  seo:    'seo_ms',
   report: 'report_ms'
 };
+
+// ── API health check ──────────────────────────────────────────────────────────
+// Pings /health on load; shows green dot in the button when the API is ready.
+
+async function checkApiHealth() {
+  try {
+    const res  = await fetch(`${API_BASE.replace('/api', '')}/health`, {
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      apiHealthDot.classList.remove('down');
+      apiHealthDot.classList.add('up');
+      apiHealthDot.setAttribute('aria-label', 'API status: ready');
+      apiHealthDot.setAttribute('title', 'API is ready');
+    } else {
+      throw new Error('bad status');
+    }
+  } catch {
+    apiHealthDot.classList.remove('up');
+    apiHealthDot.classList.add('down');
+    apiHealthDot.setAttribute('aria-label', 'API status: unavailable');
+    apiHealthDot.setAttribute('title', 'API unavailable — it may be waking up');
+  }
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
 
 submitBtn.addEventListener('click', () => submitAudit());
 urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAudit(); });
@@ -52,10 +80,10 @@ async function submitAudit() {
   setHeaderStatus('submitting…', false);
 
   try {
-    const res = await fetch(`${API_BASE}/jobs`, {
-      method: 'POST',
+    const res  = await fetch(`${API_BASE}/jobs`, {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body:    JSON.stringify({ url })
     });
 
     const data = await res.json();
@@ -71,7 +99,7 @@ async function submitAudit() {
     if (data.cached) {
       setHeaderStatus('loading cached result…', true);
       const jobRes = await fetch(`${API_BASE}/jobs/${data.jobId}`);
-      const job = await jobRes.json();
+      const job    = await jobRes.json();
       showReport(job);
     } else {
       showProgress(url, data.jobId);
@@ -83,6 +111,8 @@ async function submitAudit() {
     statusDot.className = 'status-dot error';
   }
 }
+
+// ── Progress view ─────────────────────────────────────────────────────────────
 
 function showProgress(url, jobId) {
   submitSection.classList.add('hidden');
@@ -112,7 +142,7 @@ function showProgress(url, jobId) {
 
 function trackJobProgress(jobId) {
   let pollInterval = null;
-  let eventSource = null;
+  let eventSource  = null;
 
   const cleanup = () => {
     if (pollInterval) clearInterval(pollInterval);
@@ -135,7 +165,7 @@ function trackJobProgress(jobId) {
     if (job.status === 'complete') {
       cleanup();
       progressFill.style.width = '100%';
-      const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+      const res    = await fetch(`${API_BASE}/jobs/${jobId}`);
       const fullJob = await res.json();
       setTimeout(() => showReport(fullJob), 500);
     }
@@ -167,11 +197,8 @@ function trackJobProgress(jobId) {
   try {
     eventSource = new EventSource(`${API_BASE}/stream/${jobId}`);
     eventSource.onmessage = (e) => {
-      try {
-        handleJobUpdate(JSON.parse(e.data));
-      } catch (err) {
-        console.error('SSE parse error:', err);
-      }
+      try { handleJobUpdate(JSON.parse(e.data)); }
+      catch (err) { console.error('SSE parse error:', err); }
     };
     eventSource.onerror = () => {
       eventSource.close();
@@ -184,7 +211,7 @@ function trackJobProgress(jobId) {
 }
 
 function updateStepper(currentStatus, job = {}) {
-  const currentIndex = STEP_ORDER.indexOf(currentStatus);
+  const currentIndex  = STEP_ORDER.indexOf(currentStatus);
   const progressIndex = currentIndex >= 0 ? currentIndex : STEP_ORDER.length;
 
   progressFill.style.width = `${Math.max(8, (progressIndex / STEP_ORDER.length) * 100)}%`;
@@ -231,15 +258,20 @@ function applyStepTimings(job) {
 
 function formatAuditError(error, failedStep) {
   const msg = error || 'Unknown error';
-  if (msg.includes('ERR_NAME_NOT_RESOLVED')) return 'Domain not found — double-check the URL spelling.';
-  if (msg.includes('Timeout') || msg.includes('timeout')) return 'Site took too long to respond (45s limit).';
-  if (msg.includes('ERR_CONNECTION_REFUSED') || msg.includes('ERR_CONNECTION_RESET')) {
+  if (msg.includes('ERR_NAME_NOT_RESOLVED'))
+    return 'Domain not found — double-check the URL spelling.';
+  if (msg.includes('Timeout') || msg.includes('timeout'))
+    return 'Site took too long to respond (45s limit).';
+  if (msg.includes('ERR_CONNECTION_REFUSED') || msg.includes('ERR_CONNECTION_RESET'))
     return 'Could not connect to this site — it may be down or blocking automated requests.';
-  }
-  if (msg.includes('ERR_CERT') || msg.includes('SSL')) return 'SSL certificate error — the site has an invalid or expired certificate.';
-  if (failedStep === 'crawling') return `Crawl failed: ${msg.split('\n')[0].slice(0, 120)}`;
+  if (msg.includes('ERR_CERT') || msg.includes('SSL'))
+    return 'SSL certificate error — the site has an invalid or expired certificate.';
+  if (failedStep === 'crawling')
+    return `Crawl failed: ${msg.split('\n')[0].slice(0, 120)}`;
   return `Audit failed: ${msg.split('\n')[0].slice(0, 120)}`;
 }
+
+// ── Report view ───────────────────────────────────────────────────────────────
 
 function showReport(job) {
   progressSection.classList.add('hidden');
@@ -259,29 +291,29 @@ function showReport(job) {
 
   const timingParts = [
     job.crawl_ms != null && `crawl ${job.crawl_ms}ms`,
-    job.a11y_ms != null && `a11y ${job.a11y_ms}ms`
+    job.a11y_ms  != null && `a11y ${job.a11y_ms}ms`
   ].filter(Boolean);
   document.getElementById('report-timings').textContent =
     timingParts.length ? timingParts.join(' · ') : 'step timings unavailable';
 
-  const perfScore = job.performance_score ?? report?.scores?.performance ?? 0;
-  const a11yScore = job.accessibility_score ?? report?.scores?.accessibility ?? 0;
-  const seoScore = job.seo_score ?? report?.scores?.seo ?? 0;
-  const overallScore = job.overall_score ?? report?.scores?.overall ?? 0;
+  const perfScore    = job.performance_score    ?? report?.scores?.performance    ?? 0;
+  const a11yScore    = job.accessibility_score  ?? report?.scores?.accessibility  ?? 0;
+  const seoScore     = job.seo_score            ?? report?.scores?.seo            ?? 0;
+  const overallScore = job.overall_score        ?? report?.scores?.overall        ?? 0;
 
-  animateScore('overall', overallScore);
-  animateScore('performance', perfScore);
+  animateScore('overall',       overallScore);
+  animateScore('performance',   perfScore);
   animateScore('accessibility', a11yScore);
-  animateScore('seo', seoScore);
+  animateScore('seo',           seoScore);
 
   if (report?.performance?.metrics) {
     const labels = {
-      firstContentfulPaint: 'First Contentful Paint',
-      largestContentfulPaint: 'Largest Contentful Paint',
-      timeToInteractive: 'Time to Interactive',
-      totalBlockingTime: 'Total Blocking Time',
-      cumulativeLayoutShift: 'Cumulative Layout Shift',
-      speedIndex: 'Speed Index'
+      firstContentfulPaint:    'First Contentful Paint',
+      largestContentfulPaint:  'Largest Contentful Paint',
+      timeToInteractive:       'Time to Interactive',
+      totalBlockingTime:       'Total Blocking Time',
+      cumulativeLayoutShift:   'Cumulative Layout Shift',
+      speedIndex:              'Speed Index'
     };
     document.getElementById('panel-perf-score').textContent = `score ${perfScore}`;
     document.getElementById('metrics-list').innerHTML = Object.entries(report.performance.metrics)
@@ -340,44 +372,43 @@ function scoreColor(score) {
 }
 
 function animateScore(name, score) {
-  const numEl = document.getElementById(`score-${name}`);
+  const numEl  = document.getElementById(`score-${name}`);
   const ringEl = document.getElementById(`ring-${name}`);
-  const fill = ringEl?.querySelector('.ring-fill');
+  const fill   = ringEl?.querySelector('.ring-fill');
 
   numEl.textContent = score ?? '--';
   if (fill) {
     ringEl.style.setProperty('--ring-color', scoreColor(score));
-    fill.style.stroke = scoreColor(score);
+    fill.style.stroke           = scoreColor(score);
     fill.style.strokeDashoffset = `${100 - (score || 0)}`;
   }
 }
 
+// ── New audit button ──────────────────────────────────────────────────────────
+
 document.getElementById('new-audit-btn').addEventListener('click', () => {
   reportSection.classList.add('hidden');
   submitSection.classList.remove('hidden');
-  urlInput.value = '';
-  submitBtn.disabled = false;
+  urlInput.value        = '';
+  submitBtn.disabled    = false;
   setHeaderStatus('ready', false);
-  statusDot.className = 'status-dot';
+  statusDot.className   = 'status-dot';
   loadRecent();
 });
 
+// ── Recent audits ─────────────────────────────────────────────────────────────
+
 function saveToRecent(job) {
-  const recent = JSON.parse(localStorage.getItem('recent-audits') || '[]');
-  const entry = {
-    id: job.id,
-    url: job.url,
-    overall_score: job.overall_score,
-    created_at: job.created_at
-  };
+  const recent  = JSON.parse(localStorage.getItem('recent-audits') || '[]');
+  const entry   = { id: job.id, url: job.url, overall_score: job.overall_score, created_at: job.created_at };
   const filtered = recent.filter((r) => r.url !== job.url);
   filtered.unshift(entry);
   localStorage.setItem('recent-audits', JSON.stringify(filtered.slice(0, 5)));
 }
 
 function loadRecent() {
-  const recent = JSON.parse(localStorage.getItem('recent-audits') || '[]');
-  const list = document.getElementById('recent-list');
+  const recent  = JSON.parse(localStorage.getItem('recent-audits') || '[]');
+  const list    = document.getElementById('recent-list');
   const section = document.getElementById('recent-section');
 
   if (recent.length === 0) {
@@ -402,32 +433,36 @@ function loadRecent() {
   });
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function showError(msg) {
   inputError.textContent = msg;
 }
 
 function setHeaderStatus(text, active) {
-  headerStatus.textContent = text;
-  statusDot.className = `status-dot${active ? ' active' : ''}`;
+  headerStatus.textContent  = text;
+  statusDot.className       = `status-dot${active ? ' active' : ''}`;
 }
+
+// ── PDF export ────────────────────────────────────────────────────────────────
 
 document.getElementById('download-pdf-btn').addEventListener('click', () => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const pageWidth = 210;
-  const margin = 16;
+  const pageWidth    = 210;
+  const margin       = 16;
   const contentWidth = pageWidth - margin * 2;
   let y = 20;
 
   const colors = {
-    green: [52, 211, 153],
-    dark: [15, 23, 42],
-    dim: [100, 116, 139],
+    green:  [52, 211, 153],
+    dark:   [15, 23, 42],
+    dim:    [100, 116, 139],
     dimmer: [148, 163, 184],
-    red: [248, 113, 113],
+    red:    [248, 113, 113],
     yellow: [251, 191, 36],
-    bg: [241, 245, 249]
+    bg:     [241, 245, 249]
   };
 
   const pdfScoreColor = (score) =>
@@ -463,15 +498,15 @@ document.getElementById('download-pdf-btn').addEventListener('click', () => {
   y += 10;
 
   const scoreCards = [
-    { label: 'OVERALL', id: 'score-overall' },
-    { label: 'PERFORMANCE', id: 'score-performance' },
+    { label: 'OVERALL',       id: 'score-overall' },
+    { label: 'PERFORMANCE',   id: 'score-performance' },
     { label: 'ACCESSIBILITY', id: 'score-accessibility' },
-    { label: 'SEO', id: 'score-seo' }
+    { label: 'SEO',           id: 'score-seo' }
   ];
 
   const cardWidth = contentWidth / 4;
   scoreCards.forEach((card, i) => {
-    const x = margin + i * cardWidth;
+    const x     = margin + i * cardWidth;
     const score = parseInt(document.getElementById(card.id).textContent, 10) || 0;
     doc.setFillColor(...colors.bg);
     doc.rect(x, y, cardWidth - 2, 22, 'F');
@@ -502,4 +537,7 @@ document.getElementById('download-pdf-btn').addEventListener('click', () => {
   doc.save(`seo-audit-${urlText.replace(/https?:\/\//, '').replace(/\//g, '-')}.pdf`);
 });
 
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+checkApiHealth();
 loadRecent();
