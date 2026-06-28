@@ -41,6 +41,9 @@ async function checkApiHealth() {
     });
     const data = await res.json();
     if (res.ok && data.status === 'ok') {
+      // Header dot — green + pulsing
+      setHeaderStatus('ready', true);
+      // Button dot
       apiHealthDot.classList.remove('down');
       apiHealthDot.classList.add('up');
       apiHealthDot.setAttribute('aria-label', 'API status: ready');
@@ -49,6 +52,9 @@ async function checkApiHealth() {
       throw new Error('bad status');
     }
   } catch {
+    // Header dot — stays grey, label hints the issue
+    setHeaderStatus('unavailable', false);
+    // Button dot
     apiHealthDot.classList.remove('up');
     apiHealthDot.classList.add('down');
     apiHealthDot.setAttribute('aria-label', 'API status: unavailable');
