@@ -1,25 +1,34 @@
-import { Queue } from 'bullmq';
-import Redis from 'ioredis';
+import PgBoss from 'pg-boss';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// BullMQ needs its own Redis connection — separate from the cache client
-const connection = new Redis(process.env.REDIS_URL, {
-  maxRetriesPerRequest: null,
+// pg-boss uses Postgres as its queue backend — no Redis required.
+// It creates its own `pgboss` schema in your database on first start.
+const boss = new PgBoss({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+
+  // Retention: keep completed jobs for 24 h, failed jobs for 7 days
+  deleteAfterHours: 24,
+  archiveFailedAfterHours: 168,
 });
 
-const auditQueue = new Queue('seo-audits', {
-    connection,
-    defaultJobOptions: {
-        attempts: 3,               // Retry failed jobs 3 times
-        backoff: {
-            type: 'exponential',     // Wait longer between each retry
-            delay: 5000              // Start with 5 seconds
-        },
-        removeOnComplete: 100,     // Keep last 100 completed jobs in Redis
-        removeOnFail: 50           // Keep last 50 failed jobs for debugging
-    }
-});
+boss.on('error', (err) => console.error('[pg-boss] error:', err));
 
-export default auditQueue;
+let started = false;
+
+/**
+ * Start pg-boss (idempotent — safe to call multiple times).
+ * Must be awaited before sending or working jobs.
+ */
+export const startBoss = async () => {
+  if (!started) {
+    await boss.start();
+    started = true;
+    console.log('[pg-boss] started');
+  }
+  return boss;
+};
+
+export default boss;

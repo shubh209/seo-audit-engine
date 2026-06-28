@@ -3,30 +3,23 @@ import express from 'express';
 import cors from 'cors';
 import { jest } from '@jest/globals';
 
-// Mock dependencies before importing routes
+// ── Mock dependencies before importing routes ──────────────────────────────
+
 jest.unstable_mockModule('../src/db.js', () => ({
-  default: {
-    query: jest.fn()
-  }
+  default: { query: jest.fn() }
 }));
 
-jest.unstable_mockModule('../src/redis.js', () => ({
-  default: {
-    get: jest.fn(),
-    setex: jest.fn(),
-    on: jest.fn()
-  }
-}));
-
+// queue.js now exports a pg-boss instance (default) and startBoss()
 jest.unstable_mockModule('../src/queue.js', () => ({
   default: {
-    add: jest.fn()
-  }
+    send: jest.fn().mockResolvedValue('mock-job-id'),
+    on: jest.fn(),
+  },
+  startBoss: jest.fn().mockResolvedValue(undefined),
 }));
 
-const { default: pool } = await import('../src/db.js');
-const { default: redis } = await import('../src/redis.js');
-const { default: auditQueue } = await import('../src/queue.js');
+const { default: pool }      = await import('../src/db.js');
+const { default: boss, startBoss } = await import('../src/queue.js');
 const { default: jobsRouter } = await import('../src/routes/jobs.js');
 
 const app = express();
@@ -34,32 +27,32 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/jobs', jobsRouter);
 
+// ── POST /api/jobs ─────────────────────────────────────────────────────────
+
 describe('POST /api/jobs', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  beforeEach(() => jest.clearAllMocks());
 
   test('returns 400 when URL is missing', async () => {
-    const res = await request(app)
-      .post('/api/jobs')
-      .send({});
+    const res = await request(app).post('/api/jobs').send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('URL is required');
   });
 
   test('returns 400 when URL is invalid', async () => {
-    const res = await request(app)
-      .post('/api/jobs')
-      .send({ url: 'not-a-url' });
+    const res = await request(app).post('/api/jobs').send({ url: 'not-a-url' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Invalid URL format');
   });
 
-  test('returns cached job when recent audit exists', async () => {
-    pool.query
-      .mockResolvedValueOnce({
-        rows: [{ id: 'cached-job-id', status: 'complete', overall_score: 85, created_at: new Date() }]
-      });
+  test('returns cached job when a recent completed audit exists', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{
+        id: 'cached-job-id',
+        status: 'complete',
+        overall_score: 85,
+        created_at: new Date(),
+      }],
+    });
 
     const res = await request(app)
       .post('/api/jobs')
@@ -68,14 +61,13 @@ describe('POST /api/jobs', () => {
     expect(res.status).toBe(200);
     expect(res.body.cached).toBe(true);
     expect(res.body.jobId).toBe('cached-job-id');
+    expect(boss.send).not.toHaveBeenCalled();
   });
 
-  test('creates new job and adds to queue when no cache exists', async () => {
+  test('creates new job and enqueues via pg-boss when no cache exists', async () => {
     pool.query
-      .mockResolvedValueOnce({ rows: [] }) // no cached job
-      .mockResolvedValueOnce({ rows: [{ id: 'new-job-id' }] }); // insert
-
-    auditQueue.add.mockResolvedValueOnce({});
+      .mockResolvedValueOnce({ rows: [] })                      // dedup check
+      .mockResolvedValueOnce({ rows: [{ id: 'new-job-id' }] }); // INSERT
 
     const res = await request(app)
       .post('/api/jobs')
@@ -84,29 +76,47 @@ describe('POST /api/jobs', () => {
     expect(res.status).toBe(201);
     expect(res.body.cached).toBe(false);
     expect(res.body.jobId).toBe('new-job-id');
-    expect(auditQueue.add).toHaveBeenCalledTimes(1);
+    expect(boss.send).toHaveBeenCalledWith(
+      'seo-audits',
+      { jobId: 'new-job-id', url: 'https://example.com' },
+      expect.objectContaining({ retryLimit: 3, retryBackoff: true })
+    );
+  });
+
+  test('normalises URL — strips trailing slash before dedup check', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'new-job-id' }] });
+
+    await request(app)
+      .post('/api/jobs')
+      .send({ url: 'https://example.com/' }); // trailing slash
+
+    // The URL stored in the DB should not have a trailing slash
+    const insertCall = pool.query.mock.calls[1];
+    expect(insertCall[1][0]).toBe('https://example.com');
+  });
+
+  test('normalises URL — strips hash fragment', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'new-job-id' }] });
+
+    await request(app)
+      .post('/api/jobs')
+      .send({ url: 'https://example.com/#section' });
+
+    const insertCall = pool.query.mock.calls[1];
+    expect(insertCall[1][0]).toBe('https://example.com');
   });
 });
 
+// ── GET /api/jobs/:id ──────────────────────────────────────────────────────
+
 describe('GET /api/jobs/:id', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('returns cached result from Redis when available', async () => {
-    const cachedJob = { id: 'test-id', status: 'complete', overall_score: 90 };
-    redis.get.mockResolvedValueOnce(JSON.stringify(cachedJob));
-
-    const res = await request(app).get('/api/jobs/test-id');
-
-    expect(res.status).toBe(200);
-    expect(res.body.fromCache).toBe(true);
-    expect(res.body.overall_score).toBe(90);
-    expect(pool.query).not.toHaveBeenCalled();
-  });
+  beforeEach(() => jest.clearAllMocks());
 
   test('returns 404 when job not found', async () => {
-    redis.get.mockResolvedValueOnce(null);
     pool.query.mockResolvedValueOnce({ rows: [] });
 
     const res = await request(app).get('/api/jobs/nonexistent-id');
@@ -115,45 +125,31 @@ describe('GET /api/jobs/:id', () => {
     expect(res.body.error).toBe('Job not found');
   });
 
-  test('returns job from database when not in cache', async () => {
+  test('returns job data directly from Postgres', async () => {
     const job = {
       id: 'test-id',
       status: 'complete',
       overall_score: 85,
-      url: 'https://example.com'
+      url: 'https://example.com',
     };
-    redis.get.mockResolvedValueOnce(null);
     pool.query.mockResolvedValueOnce({ rows: [job] });
-    redis.setex.mockResolvedValueOnce('OK');
 
     const res = await request(app).get('/api/jobs/test-id');
 
     expect(res.status).toBe(200);
     expect(res.body.overall_score).toBe(85);
+    expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
-  test('caches completed jobs in Redis', async () => {
-    const job = { id: 'test-id', status: 'complete', overall_score: 85 };
-    redis.get.mockResolvedValueOnce(null);
-    pool.query.mockResolvedValueOnce({ rows: [job] });
-    redis.setex.mockResolvedValueOnce('OK');
-
-    await request(app).get('/api/jobs/test-id');
-
-    expect(redis.setex).toHaveBeenCalledWith(
-      'job:v2:test-id',
-      86400,
-      expect.any(String)
-    );
-  });
-
-  test('does not cache in-progress jobs', async () => {
-    const job = { id: 'test-id', status: 'processing', overall_score: null };
-    redis.get.mockResolvedValueOnce(null);
+  test('returns in-progress job without caching', async () => {
+    const job = { id: 'test-id', status: 'crawling', overall_score: null };
     pool.query.mockResolvedValueOnce({ rows: [job] });
 
-    await request(app).get('/api/jobs/test-id');
+    const res = await request(app).get('/api/jobs/test-id');
 
-    expect(redis.setex).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('crawling');
+    // Only one DB call — no secondary cache write
+    expect(pool.query).toHaveBeenCalledTimes(1);
   });
 });

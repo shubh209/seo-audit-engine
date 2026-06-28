@@ -1,49 +1,49 @@
 import { jest } from '@jest/globals';
 
-jest.unstable_mockModule('ioredis', () => {
+// Mock pg-boss so no real DB connection is needed
+jest.unstable_mockModule('pg-boss', () => {
   return {
     default: jest.fn().mockImplementation(() => ({
       on: jest.fn(),
-      get: jest.fn(),
-      set: jest.fn(),
-      publish: jest.fn(),
-      subscribe: jest.fn()
+      start: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue(undefined),
+      send: jest.fn().mockResolvedValue('mock-job-id'),
+      work: jest.fn().mockResolvedValue(undefined),
     }))
   };
 });
 
-jest.unstable_mockModule('bullmq', () => ({
-  Queue: jest.fn().mockImplementation(() => ({
-    add: jest.fn().mockResolvedValue({ id: 'mock-job-id' }),
-    getJobs: jest.fn().mockResolvedValue([]),
-    close: jest.fn()
-  }))
-}));
+const PgBoss = (await import('pg-boss')).default;
+const { default: boss, startBoss } = await import('../src/queue.js');
 
-const { Queue } = await import('bullmq');
-const { default: auditQueue } = await import('../src/queue.js');
-
-describe('Queue configuration', () => {
-  test('Queue is initialized with correct name', () => {
-    expect(Queue).toHaveBeenCalledWith(
-      'seo-audits',
-      expect.any(Object)
+describe('Queue (pg-boss) configuration', () => {
+  test('PgBoss is instantiated with DATABASE_URL and ssl options', () => {
+    expect(PgBoss).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ssl: expect.objectContaining({ rejectUnauthorized: false }),
+      })
     );
   });
 
-  test('Queue has correct default job options', () => {
-    const queueOptions = Queue.mock.calls[0][1];
-    expect(queueOptions.defaultJobOptions.attempts).toBe(3);
-    expect(queueOptions.defaultJobOptions.backoff.type).toBe('exponential');
+  test('startBoss() starts the boss instance', async () => {
+    await startBoss();
+    expect(boss.start).toHaveBeenCalledTimes(1);
   });
 
-  test('can add a job to the queue', async () => {
-    const result = await auditQueue.add('audit', {
+  test('startBoss() is idempotent — calling twice does not double-start', async () => {
+    // boss.start call count should still be 1 from the previous test
+    await startBoss();
+    expect(boss.start).toHaveBeenCalledTimes(1);
+  });
+
+  test('boss.send() can enqueue a job', async () => {
+    const id = await boss.send('seo-audits', {
       jobId: 'test-id',
-      url: 'https://example.com'
+      url: 'https://example.com',
     });
-    expect(auditQueue.add).toHaveBeenCalledWith(
-      'audit',
+    expect(id).toBe('mock-job-id');
+    expect(boss.send).toHaveBeenCalledWith(
+      'seo-audits',
       { jobId: 'test-id', url: 'https://example.com' }
     );
   });

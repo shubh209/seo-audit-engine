@@ -13,6 +13,9 @@ export const getBrowser = async () => {
         '--disable-gpu'
       ]
     });
+    // If the launch rejects, clear the promise so the next call retries
+    // instead of re-awaiting a permanently rejected promise.
+    browserPromise.catch(() => { browserPromise = null; });
   }
   return browserPromise;
 };

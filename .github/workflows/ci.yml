@@ -52,7 +52,6 @@ jobs:
       - name: Run API tests
         env:
           DATABASE_URL: postgresql://fake:fake@localhost/fake
-          REDIS_URL: redis://localhost:6379
           NODE_ENV: test
           PORT: 3000
         run: npm test

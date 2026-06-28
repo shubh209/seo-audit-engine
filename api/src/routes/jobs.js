@@ -1,60 +1,79 @@
 import { Router } from 'express';
-import { v4 as uuid } from 'uuid';
 import pool from '../db.js';
-import redis from '../redis.js';
-import auditQueue from '../queue.js';
+import boss, { startBoss } from '../queue.js';
 
 const router = Router();
+
+/**
+ * Normalise a URL for deduplication:
+ *  - strips fragments (#...)
+ *  - strips trailing slash
+ *  - lowercases scheme + host
+ * Query params are preserved because /page?lang=en and /page?lang=fr are
+ * genuinely different pages.
+ */
+const normaliseUrl = (raw) => {
+  const u = new URL(raw);
+  u.hash = '';
+  return u.href.replace(/\/$/, '');
+};
 
 // POST /api/jobs — submit a new audit job
 router.post('/', async (req, res) => {
   const { url } = req.body;
 
-  // Basic validation
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
   }
 
+  let normalisedUrl;
   try {
-    new URL(url); // Throws if URL is invalid
+    normalisedUrl = normaliseUrl(url);
   } catch {
     return res.status(400).json({ error: 'Invalid URL format' });
   }
 
   try {
-    // Check if we already have a recent completed audit for this URL
-    // "Recent" = within the last 24 hours
+    // Ensure pg-boss is running before we try to send a job
+    await startBoss();
+
+    // Return a cached result if we already audited this URL in the last 24 hours
     const { rows: existing } = await pool.query(
-      `SELECT id, status, overall_score, created_at 
-       FROM jobs 
-       WHERE url = $1 
-       AND status = 'complete' 
-       AND created_at > NOW() - INTERVAL '24 hours'
-       ORDER BY created_at DESC 
+      `SELECT id, status, overall_score, created_at
+       FROM jobs
+       WHERE url = $1
+         AND status = 'complete'
+         AND created_at > NOW() - INTERVAL '24 hours'
+       ORDER BY created_at DESC
        LIMIT 1`,
-      [url]
+      [normalisedUrl]
     );
 
     if (existing.length > 0) {
-        return res.status(200).json({
-            jobId: existing[0].id,
-            cached: true,
-            message: 'Returning cached audit from the last 24 hours'
-        });
+      return res.status(200).json({
+        jobId: existing[0].id,
+        cached: true,
+        message: 'Returning cached audit from the last 24 hours',
+      });
     }
 
-    // Create a new job record in PostgreSQL
+    // Insert the job row first so the worker can update it
     const { rows } = await pool.query(
-      `INSERT INTO jobs (url, status) 
-       VALUES ($1, 'queued') 
+      `INSERT INTO jobs (url, status)
+       VALUES ($1, 'queued')
        RETURNING id`,
-      [url]
+      [normalisedUrl]
     );
 
     const jobId = rows[0].id;
 
-    // Add to BullMQ queue
-    await auditQueue.add('audit', { jobId, url }, { jobId });
+    // Enqueue via pg-boss — no Redis involved
+    await boss.send('seo-audits', { jobId, url: normalisedUrl }, {
+      retryLimit: 3,
+      retryDelay: 5,          // seconds between retries
+      retryBackoff: true,     // exponential backoff
+      expireInHours: 1,       // abandon job if not picked up within 1 hour
+    });
 
     res.status(201).json({ jobId, cached: false });
 
@@ -65,16 +84,11 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/jobs/:id — get job status and result
+// Completed jobs are cheap to re-query (indexed by id); no separate cache needed.
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Check Redis cache first
-    const cached = await redis.get(`job:v2:${id}`);
-    if (cached) {
-      return res.json({ ...JSON.parse(cached), fromCache: true });
-    }
-
     const { rows } = await pool.query(
       `SELECT id, url, status, performance_score, accessibility_score,
               seo_score, overall_score, report, error, failed_step,
@@ -89,14 +103,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    const job = rows[0];
-
-    // Only cache completed or failed jobs — in-progress jobs change constantly
-    if (job.status === 'complete' || job.status === 'failed') {
-      await redis.setex(`job:v2:${id}`, 86400, JSON.stringify(job)); // 24hr TTL
-    }
-
-    res.json(job);
+    res.json(rows[0]);
 
   } catch (err) {
     console.error('GET /api/jobs/:id error:', err);

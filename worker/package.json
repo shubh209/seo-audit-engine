@@ -9,23 +9,20 @@
     "test": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
   },
   "jest": {
-  "transform": {},
-  "testEnvironment": "node",
-  "testMatch": ["**/__tests__/**/*.test.js"],
-  "collectCoverageFrom": [
-    "src/**/*.js"
-  ]
-},
+    "transform": {},
+    "testEnvironment": "node",
+    "testMatch": ["**/__tests__/**/*.test.js"],
+    "collectCoverageFrom": ["src/**/*.js"]
+  },
+  "type": "module",
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "dependencies": {
     "axe-core": "^4.11.1",
-    "bullmq": "^5.71.1",
     "dotenv": "^17.3.1",
-    "ioredis": "^5.10.1",
     "pg": "^8.20.0",
+    "pg-boss": "^10.1.5",
     "playwright": "^1.58.2"
   },
   "devDependencies": {
